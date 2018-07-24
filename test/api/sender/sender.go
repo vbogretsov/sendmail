@@ -9,6 +9,7 @@ import (
 type Sender struct {
 	mutex sync.Mutex
 	Inbox []model.Message
+	Error error
 }
 
 func New() *Sender {
@@ -16,6 +17,10 @@ func New() *Sender {
 }
 
 func (self *Sender) Send(msg model.Message) error {
+	if self.Error != nil {
+		return self.Error
+	}
+
 	self.mutex.Lock()
 	self.Inbox = append(self.Inbox, msg)
 	self.mutex.Unlock()

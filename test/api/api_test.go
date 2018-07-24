@@ -34,6 +34,19 @@ var amqpurl = flag.String(
 	"amqp://guest:guest@localhost",
 	"AMQP broker URL")
 
+var defaultRequest = model.Request{
+	TemplateLang: loader.Lang,
+	TemplateName: loader.TemplateValid,
+	TemplateArgs: map[string]interface{}{
+		"Username": "SuperUser",
+	},
+	To: []model.Address{
+		{
+			Email: "user@mail.com",
+		},
+	},
+}
+
 func wait(action func() bool) error {
 	c := make(chan bool)
 
@@ -112,22 +125,7 @@ func TestApi(t *testing.T) {
 	}
 
 	t.Run("MailSent", func(t *testing.T) {
-		to := []model.Address{
-			{
-				Email: "user@mail.com",
-				Name:  "",
-			},
-		}
-
-		req := model.Request{
-			TemplateLang: loader.Lang,
-			TemplateName: loader.TemplateValid,
-			TemplateArgs: map[string]interface{}{
-				"Username": "SuperUser",
-			},
-			To: to,
-		}
-
+		req := defaultRequest
 		err := cli.Send(req)
 		require.Nil(t, err)
 
@@ -140,12 +138,32 @@ func TestApi(t *testing.T) {
 			From:     model.Address{Email: "user@mail.com", Name: "Sender"},
 			BodyType: "text/plain",
 			Body:     fmt.Sprintf(loader.ExpectedBody, "SuperUser"),
-			To:       to,
+			To:       req.To,
 			Cc:       []model.Address{},
 			Bcc:      []model.Address{},
 		}
 
 		act := sd.Inbox[0]
+		require.Equal(t, exp, act)
+	})
+
+	t.Run("SendFailed", func(t *testing.T) {
+		sd.Error = errors.New("send failed")
+		defer func() {
+			sd.Error = nil
+		}()
+
+		err := cli.Send(defaultRequest)
+		require.Nil(t, err)
+
+		wait(func() bool {
+			return len(log.Entries) > 0
+		})
+
+		require.Len(t, log.Entries, 1)
+
+		exp := sd.Error.Error()
+		act := log.LastEntry().Data["error"].(error).Error()
 		require.Equal(t, exp, act)
 	})
 }
