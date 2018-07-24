@@ -132,7 +132,7 @@ func TestApi(t *testing.T) {
 		require.Nil(t, err)
 
 		wait(func() bool {
-			return len(sd.Inbox) > 1
+			return len(sd.Inbox) > 0
 		})
 
 		exp := model.Message{
