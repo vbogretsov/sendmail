@@ -3,31 +3,42 @@ package api
 import (
 	"encoding/json"
 
-	"github.com/vbogretsov/go-validation"
-
 	log "github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
+	"github.com/thanhpk/randstr"
+	"github.com/vbogretsov/go-validation"
 	jsonerr "github.com/vbogretsov/go-validation/json"
 
 	"github.com/vbogretsov/sendmail/app"
 	"github.com/vbogretsov/sendmail/model"
 )
 
-// Run starts consuming client requests.
-func Run(ap *app.App, url, qname string) error {
-	log.Debugf("connecting AMQP broker %s", url)
+const idsize = 32
 
-	cn, err := amqp.Dial(url)
-	if err != nil {
-		return err
-	}
-	defer cn.Close()
+type ErrorMarshaler func(error) interface{}
+
+// Api represents sendmail AMQP API.
+type Api struct {
+	ap      *app.App
+	ch      *amqp.Channel
+	rq      <-chan amqp.Delivery
+	requeue bool
+}
+
+// New creates new Api.
+func New(ap *app.App, qname string, requeue bool, cn *amqp.Connection) (*Api, error) {
+	var err error
 
 	ch, err := cn.Channel()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer ch.Close()
+
+	defer func() {
+		if err != nil {
+			ch.Close()
+		}
+	}()
 
 	err = ch.ExchangeDeclare(
 		qname,    // name
@@ -39,7 +50,7 @@ func Run(ap *app.App, url, qname string) error {
 		nil,      // arguments
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	qe, err := ch.QueueDeclare(
@@ -51,7 +62,7 @@ func Run(ap *app.App, url, qname string) error {
 		nil,   // arguments
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = ch.QueueBind(
@@ -62,7 +73,7 @@ func Run(ap *app.App, url, qname string) error {
 		nil,     // arguments
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	reqs, err := ch.Consume(
@@ -75,38 +86,54 @@ func Run(ap *app.App, url, qname string) error {
 		nil,     // arguments
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	log.Debug("AMQP broker connected")
+	return &Api{ap: ap, ch: ch, requeue: requeue, rq: reqs}, nil
+}
 
-	for i := range reqs {
-		err := sendmail(ap, i)
+// Start starts listening for email requests.
+func (self *Api) Start() {
+	for i := range self.rq {
+		reqid := randstr.String(idsize)
+
+		err := sendmail(reqid, self.ap, i)
 		if err != nil {
 			switch err.(type) {
 			case app.ArgumentError:
-				e := jsonerr.New(
-					err.(validation.Errors),
-					jsonerr.DefaultFormatter,
-					jsonerr.DefaultJoiner)
 				log.WithFields(log.Fields{
-					"error": e,
-				}).Error("invalid request parameters")
+					"id": reqid,
+					"error": marshal(
+						err.(app.ArgumentError).Err.(validation.Errors)),
+				}).Error("invalid request")
+				i.Nack(false, false)
+			case app.TemplateError:
+
+				log.WithFields(log.Fields{
+					"id": reqid,
+					"error": marshal(
+						err.(app.TemplateError).Err.(validation.Errors)),
+				}).Error("invalid template")
+				i.Nack(false, self.requeue)
 			default:
 				log.WithFields(log.Fields{
-					"error": err.Error(),
-				}).Fatal("unable to send email")
+					"id":    reqid,
+					"error": err,
+				}).Error("unable to send email")
+				i.Nack(false, self.requeue)
 			}
-			i.Nack(false, true)
 		} else {
 			i.Ack(false)
 		}
 	}
-
-	return nil
 }
 
-func sendmail(ap *app.App, i amqp.Delivery) error {
+// Close closes the underlying channel.
+func (self *Api) Close() error {
+	return self.ch.Close()
+}
+
+func sendmail(reqid string, ap *app.App, i amqp.Delivery) error {
 	req := model.Request{}
 
 	if err := json.Unmarshal(i.Body, &req); err != nil {
@@ -115,7 +142,8 @@ func sendmail(ap *app.App, i amqp.Delivery) error {
 
 	log.WithFields(log.Fields{
 		"request": req,
-	}).Debug("received request")
+		"id":      reqid,
+	}).Debug("request received")
 
 	if err := ap.SendMail(req); err != nil {
 		return err
@@ -123,7 +151,12 @@ func sendmail(ap *app.App, i amqp.Delivery) error {
 
 	log.WithFields(log.Fields{
 		"request": req,
-	}).Debug("mail sent")
+		"id":      reqid,
+	}).Debug("request completed")
 
 	return nil
+}
+
+func marshal(err validation.Errors) json.Marshaler {
+	return jsonerr.New(err, jsonerr.DefaultFormatter, jsonerr.DefaultJoiner)
 }

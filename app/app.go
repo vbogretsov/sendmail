@@ -35,6 +35,16 @@ func (e ArgumentError) Error() string {
 	return e.Err.Error()
 }
 
+// TemplateError represents error caused by invalid template
+type TemplateError struct {
+	Err error
+}
+
+// Error gets string representation of a template error.
+func (e TemplateError) Error() string {
+	return e.Err.Error()
+}
+
 // Loader represents interface of templates loader.
 type Loader interface {
 	// Load loads a template with the language and name provided.
@@ -119,7 +129,7 @@ func (ap *App) SendMail(req model.Request) error {
 	}
 
 	if err := messageRule(&msg); err != nil {
-		return err
+		return TemplateError{Err: err}
 	}
 
 	return ap.sender.Send(msg)

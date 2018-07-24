@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/vbogretsov/sendmail/api"
 	"github.com/vbogretsov/sendmail/app"
+	"github.com/vbogretsov/sendmail/model"
 
 	"github.com/vbogretsov/sendmail/test/api/client"
 	"github.com/vbogretsov/sendmail/test/api/fixture"
@@ -108,4 +110,42 @@ func TestApi(t *testing.T) {
 			log.Reset()
 		})
 	}
+
+	t.Run("MailSent", func(t *testing.T) {
+		to := []model.Address{
+			{
+				Email: "user@mail.com",
+				Name:  "",
+			},
+		}
+
+		req := model.Request{
+			TemplateLang: loader.Lang,
+			TemplateName: loader.TemplateValid,
+			TemplateArgs: map[string]interface{}{
+				"Username": "SuperUser",
+			},
+			To: to,
+		}
+
+		err := cli.Send(req)
+		require.Nil(t, err)
+
+		wait(func() bool {
+			return len(sd.Inbox) > 1
+		})
+
+		exp := model.Message{
+			Subject:  "Subject",
+			From:     model.Address{Email: "user@mail.com", Name: "Sender"},
+			BodyType: "text/plain",
+			Body:     fmt.Sprintf(loader.ExpectedBody, "SuperUser"),
+			To:       to,
+			Cc:       []model.Address{},
+			Bcc:      []model.Address{},
+		}
+
+		act := sd.Inbox[0]
+		require.Equal(t, exp, act)
+	})
 }

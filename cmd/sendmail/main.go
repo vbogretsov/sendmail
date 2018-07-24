@@ -6,6 +6,7 @@ import (
 
 	"github.com/akamensky/argparse"
 	log "github.com/sirupsen/logrus"
+	"github.com/streadway/amqp"
 
 	"github.com/vbogretsov/sendmail/api"
 	"github.com/vbogretsov/sendmail/app"
@@ -142,7 +143,20 @@ func run() error {
 
 	log.SetFormatter(&log.JSONFormatter{})
 
-	return api.Run(ap, *args.amqp.URL, *args.amqp.QName)
+	cn, err := amqp.Dial(*args.amqp.URL)
+	if err != nil {
+		return err
+	}
+	defer cn.Close()
+
+	cnt, err := api.New(ap, *args.amqp.QName, cn)
+	if err != nil {
+		return err
+	}
+	defer cnt.Close()
+
+	cnt.Start()
+	return nil
 }
 
 func main() {
