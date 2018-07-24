@@ -1,0 +1,8 @@
+version: "3"
+services:
+  mq:
+    container_name: sendmail-mq
+    restart: always
+    image: rabbitmq:3.7-alpine
+    ports:
+    - 5672:5672
