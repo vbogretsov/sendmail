@@ -3,9 +3,9 @@ package api
 import (
 	"encoding/json"
 
+	"github.com/labstack/gommon/random"
 	log "github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
-	"github.com/thanhpk/randstr"
 	"github.com/vbogretsov/go-validation"
 	jsonerr "github.com/vbogretsov/go-validation/json"
 
@@ -95,7 +95,7 @@ func New(ap *app.App, qname string, requeue bool, cn *amqp.Connection) (*Api, er
 // Start starts listening for email requests.
 func (self *Api) Start() {
 	for i := range self.rq {
-		reqid := randstr.String(idsize)
+		reqid := random.String(idsize)
 
 		err := sendmail(reqid, self.ap, i)
 		if err != nil {

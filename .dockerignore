@@ -1,0 +1,10 @@
+./**/*.go
+.venv
+.vscode
+docker-compose.yml
+LICENSE
+README.md
+go.mod
+go.sum
+version
+Taskfile.yml

@@ -19,7 +19,7 @@ const (
 	desc = "email microservice"
 )
 
-var Version = "0.1.0"
+var Version = ""
 
 const (
 	helpProviderName = "SMTP provider name [%v]"
@@ -149,7 +149,7 @@ func run() error {
 	}
 	defer cn.Close()
 
-	cnt, err := api.New(ap, *args.amqp.QName, cn)
+	cnt, err := api.New(ap, *args.amqp.QName, true, cn)
 	if err != nil {
 		return err
 	}

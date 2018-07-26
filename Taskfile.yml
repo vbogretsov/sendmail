@@ -1,0 +1,53 @@
+version: "2"
+
+vars:
+  VERSION: {sh: cat version}
+  GOOS: linux
+  GOARCH: amd64
+  LDFLAGS: "-w -s"
+  EXE: sendmail
+  IMG: vbogretsov/{{.EXE}}:{{.VERSION}}
+
+tasks:
+  exe:
+    desc: build service
+    cmds:
+    - env GOOS={{.GOOS}} GOARCH={{.GOARCH}} vgo build -v -ldflags "{{.LDFLAGS}} -X main.Version={{.VERSION}}" -o {{.EXE}} ./cmd/{{.EXE}}
+    sources:
+    - ./!(.venv)/**/*.go
+    generates:
+    - "{{.EXE}}"
+
+  img:
+    desc: build docker image
+    deps: [exe]
+    cmds:
+    - docker build -t {{.IMG}} .
+    status:
+    - docker images | grep {{.IMG}}
+
+  up:
+    desc: up test environment
+    cmds:
+    - docker-compose up -d
+    - while  [ `docker inspect -f '{{ "{{" }} .State.Status {{ "}}" }}' sendmail-waitmq` != "exited" ]; do sleep 1; done
+    status:
+    - docker ps | grep sendmail-mq
+
+  test:
+    desc: run tests
+    deps: [up]
+    cmds:
+     - vgo test -v ./test/api/ -amqpurl amqp://guest:guest@localhost
+
+  down:
+    desc: down test environment
+    cmds:
+    - docker-compose down
+
+  clean:
+    desc: clean all
+    deps: [down]
+    cmds:
+    - env GOOS={{.GOOS}} GOARCH={{.GOARCH}} go clean
+    - rm {{.EXE}}
