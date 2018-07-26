@@ -11,7 +11,7 @@ ENV SENDMAIL_AMQP_URL= \
 ADD ./sendmail /bin/
 ADD ./docker-entrypoint.sh /bin/
 
-RUN adduser -D -s /sbin/nologin sendmail
+RUN adduser -D -s /bin/sh sendmail
 
 USER sendmail
 
