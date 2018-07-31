@@ -76,14 +76,14 @@ func atLeastOneRecipient(v interface{}) error {
 	return nil
 }
 
-var addressRule, _ = validation.Struct(&model.Address{}, "yaml", []validation.Field{
+var addressRule = validation.Struct(&model.Address{}, "yaml", []validation.Field{
 	{
 		Attr:  addressEmail,
 		Rules: []validation.Rule{strEmail},
 	},
 })
 
-var requestRule, _ = validation.Struct(&model.Request{}, "json", []validation.Field{
+var requestRule = validation.Struct(&model.Request{}, "json", []validation.Field{
 	{
 		Attr:  requestTemplateLang,
 		Rules: []validation.Rule{strRequired},
@@ -112,11 +112,11 @@ var requestRule, _ = validation.Struct(&model.Request{}, "json", []validation.Fi
 	},
 	{
 		Attr:  self,
-		Rules: []validation.Rule{atLeastOneRecipient},
+		Rules: []validation.Rule{validation.Func(atLeastOneRecipient)},
 	},
-})
+})(nil)
 
-var messageRule, _ = validation.Struct(&model.Message{}, "yaml", []validation.Field{
+var messageRule = validation.Struct(&model.Message{}, "yaml", []validation.Field{
 	{
 		Attr:  messageSubject,
 		Rules: []validation.Rule{strRequired},
@@ -137,4 +137,4 @@ var messageRule, _ = validation.Struct(&model.Message{}, "yaml", []validation.Fi
 		Attr:  self,
 		Rules: []validation.Rule{},
 	},
-})
+})(nil)
